@@ -1,29 +1,26 @@
 "use client"
 
-import { useAuth, AuthProvider } from "@/lib/auth"
+import { useAuth } from "@/lib/auth"
 import { AuthForm } from "@/components/auth-form"
 import { Dashboard } from "@/components/dashboard"
-import { Toaster } from "@/components/ui/toaster"
 
-function AppContent() {
+export default function Home() {
   const { user, loading } = useAuth()
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
       </div>
     )
   }
 
-  return user ? <Dashboard /> : <AuthForm />
-}
+  if (!user) {
+    return <AuthForm />
+  }
 
-export default function Home() {
-  return (
-    <AuthProvider>
-      <AppContent />
-      <Toaster />
-    </AuthProvider>
-  )
+  return <Dashboard />
 }

@@ -1,10 +1,9 @@
 "use client"
 
 import type React from "react"
-
+import { createContext, useContext, useEffect, useState } from "react"
 import { supabase } from "./supabase"
 import type { User } from "@supabase/supabase-js"
-import { createContext, useContext, useEffect, useState } from "react"
 
 interface AuthContextType {
   user: User | null
@@ -71,7 +70,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error
   }
 
-  return <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut }}>{children}</AuthContext.Provider>
+  const value = {
+    user,
+    loading,
+    signIn,
+    signUp,
+    signOut,
+  }
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {

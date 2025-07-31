@@ -2,15 +2,15 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Send } from "lucide-react"
+import { formatDistanceToNow } from "date-fns"
 import { useAuth } from "@/lib/auth"
 import { supabase } from "@/lib/supabase"
 import { toast } from "@/hooks/use-toast"
-import { format } from "date-fns"
 
 interface Comment {
   id: string
@@ -18,7 +18,6 @@ interface Comment {
   created_at: string
   user_id: string
   user_name: string
-  user_avatar: string | null
 }
 
 interface CommentsSectionProps {
@@ -32,10 +31,6 @@ export function CommentsSection({ expenseId }: CommentsSectionProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  useEffect(() => {
-    fetchComments()
-  }, [expenseId])
-
   const fetchComments = async () => {
     try {
       const { data, error } = await supabase
@@ -45,38 +40,43 @@ export function CommentsSection({ expenseId }: CommentsSectionProps) {
           content,
           created_at,
           user_id,
-          users (
-            name,
-            avatar_url
-          )
+          users!comments_user_id_fkey(name)
         `)
         .eq("expense_id", expenseId)
         .order("created_at", { ascending: true })
 
       if (error) throw error
 
-      const formattedComments = data.map((comment) => ({
+      const commentsWithUserNames = data.map((comment: any) => ({
         id: comment.id,
         content: comment.content,
         created_at: comment.created_at,
         user_id: comment.user_id,
-        user_name: (comment.users as any).name,
-        user_avatar: (comment.users as any).avatar_url,
+        user_name: comment.users.name,
       }))
 
-      setComments(formattedComments)
+      setComments(commentsWithUserNames)
     } catch (error) {
-      console.error("Error fetching comments:", error)
+      toast({
+        title: "Error fetching comments",
+        description: error instanceof Error ? error.message : "Something went wrong",
+        variant: "destructive",
+      })
     } finally {
       setIsLoading(false)
     }
   }
+
+  useEffect(() => {
+    fetchComments()
+  }, [expenseId])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!user || !newComment.trim()) return
 
     setIsSubmitting(true)
+
     try {
       const { error } = await supabase.from("comments").insert([
         {
@@ -102,27 +102,26 @@ export function CommentsSection({ expenseId }: CommentsSectionProps) {
   }
 
   if (isLoading) {
-    return <div className="text-center text-gray-500">Loading comments...</div>
+    return <div className="text-center py-4 text-gray-500">Loading comments...</div>
   }
 
   return (
     <div className="space-y-4">
-      {comments.length === 0 ? (
-        <p className="text-gray-500 text-sm text-center py-4">No comments yet</p>
-      ) : (
-        <div className="space-y-3 max-h-48 overflow-y-auto">
+      {comments.length > 0 && (
+        <div className="space-y-3 max-h-60 overflow-y-auto">
           {comments.map((comment) => (
             <div key={comment.id} className="flex space-x-3">
-              <Avatar className="h-6 w-6 flex-shrink-0">
-                <AvatarImage src={comment.user_avatar || undefined} />
+              <Avatar className="h-8 w-8">
                 <AvatarFallback className="text-xs">{comment.user_name.charAt(0)}</AvatarFallback>
               </Avatar>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center space-x-2">
+              <div className="flex-1">
+                <div className="flex items-center space-x-2 mb-1">
                   <span className="text-sm font-medium">{comment.user_name}</span>
-                  <span className="text-xs text-gray-500">{format(new Date(comment.created_at), "MMM d, h:mm a")}</span>
+                  <span className="text-xs text-gray-500">
+                    {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true })}
+                  </span>
                 </div>
-                <p className="text-sm text-gray-700 mt-1">{comment.content}</p>
+                <p className="text-sm text-gray-700">{comment.content}</p>
               </div>
             </div>
           ))}
@@ -134,10 +133,10 @@ export function CommentsSection({ expenseId }: CommentsSectionProps) {
           value={newComment}
           onChange={(e) => setNewComment(e.target.value)}
           placeholder="Add a comment..."
-          className="flex-1 min-h-[60px] resize-none"
-          rows={2}
+          className="flex-1 min-h-[80px]"
+          disabled={isSubmitting}
         />
-        <Button type="submit" size="sm" disabled={isSubmitting || !newComment.trim()} className="self-end">
+        <Button type="submit" size="sm" disabled={isSubmitting || !newComment.trim()}>
           <Send className="h-4 w-4" />
         </Button>
       </form>

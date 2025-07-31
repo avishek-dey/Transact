@@ -1,28 +1,18 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { ArrowLeft, Plus, Users, Receipt } from "lucide-react"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
+import { ArrowLeft, Plus, UserPlus, Receipt } from "lucide-react"
+import { AddExpenseDialog } from "./add-expense-dialog"
+import { AddMemberDialog } from "./add-member-dialog"
+import { ExpenseCard } from "./expense-card"
 import { useAuth } from "@/lib/auth"
 import { supabase } from "@/lib/supabase"
-import { AddExpenseDialog } from "./add-expense-dialog"
-import { ExpenseCard } from "./expense-card"
-import { AddMemberDialog } from "./add-member-dialog"
-
-interface GroupViewProps {
-  groupId: string
-  onBack: () => void
-  onGroupUpdated: () => void
-}
-
-interface Group {
-  id: string
-  name: string
-  description: string | null
-  created_at: string
-}
+import { toast } from "@/hooks/use-toast"
 
 interface Member {
   id: string
@@ -49,41 +39,36 @@ interface Expense {
   comments_count: number
 }
 
-export function GroupView({ groupId, onBack, onGroupUpdated }: GroupViewProps) {
+interface GroupViewProps {
+  groupId: string
+  onBack: () => void
+}
+
+export function GroupView({ groupId, onBack }: GroupViewProps) {
   const { user } = useAuth()
-  const [group, setGroup] = useState<Group | null>(null)
+  const [groupName, setGroupName] = useState("")
   const [members, setMembers] = useState<Member[]>([])
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [showAddExpense, setShowAddExpense] = useState(false)
   const [showAddMember, setShowAddMember] = useState(false)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    fetchGroupData()
-  }, [groupId])
+  const [isLoading, setIsLoading] = useState(true)
 
   const fetchGroupData = async () => {
+    if (!user) return
+
     try {
-      // Fetch group details
-      const { data: groupData, error: groupError } = await supabase
-        .from("groups")
-        .select("*")
-        .eq("id", groupId)
-        .single()
+      // Fetch group info
+      const { data: group, error: groupError } = await supabase.from("groups").select("name").eq("id", groupId).single()
 
       if (groupError) throw groupError
-      setGroup(groupData)
+      setGroupName(group.name)
 
       // Fetch members with balances
       const { data: membersData, error: membersError } = await supabase
         .from("group_members")
         .select(`
-          users (
-            id,
-            name,
-            email,
-            avatar_url
-          )
+          user_id,
+          users!inner(id, name, email, avatar_url)
         `)
         .eq("group_id", groupId)
 
@@ -91,37 +76,18 @@ export function GroupView({ groupId, onBack, onGroupUpdated }: GroupViewProps) {
 
       // Calculate balances for each member
       const membersWithBalances = await Promise.all(
-        membersData.map(async (member) => {
-          const userId = (member.users as any).id
-
-          // Amount they paid
-          const { data: paidExpenses } = await supabase
-            .from("expenses")
-            .select("amount")
-            .eq("group_id", groupId)
-            .eq("paid_by", userId)
-
-          const totalPaid = paidExpenses?.reduce((sum, exp) => sum + exp.amount, 0) || 0
-
-          // Amount they owe
-          const { data: splits } = await supabase
-            .from("expense_splits")
-            .select("amount")
-            .eq("user_id", userId)
-            .in(
-              "expense_id",
-              (await supabase.from("expenses").select("id").eq("group_id", groupId)).data?.map((e) => e.id) || [],
-            )
-
-          const totalOwed = splits?.reduce((sum, split) => sum + split.amount, 0) || 0
-          const balance = totalPaid - totalOwed
+        membersData.map(async (member: any) => {
+          const { data: balanceData } = await supabase.rpc("calculate_user_balance", {
+            p_user_id: member.user_id,
+            p_group_id: groupId,
+          })
 
           return {
-            id: userId,
-            name: (member.users as any).name,
-            email: (member.users as any).email,
-            avatar_url: (member.users as any).avatar_url,
-            balance,
+            id: member.user_id,
+            name: member.users.name,
+            email: member.users.email,
+            avatar_url: member.users.avatar_url,
+            balance: balanceData || 0,
           }
         }),
       )
@@ -129,23 +95,44 @@ export function GroupView({ groupId, onBack, onGroupUpdated }: GroupViewProps) {
       setMembers(membersWithBalances)
 
       // Fetch expenses
-      const { data: expensesData, error: expensesError } = await supabase
+      await fetchExpenses()
+    } catch (error) {
+      toast({
+        title: "Error fetching group data",
+        description: error instanceof Error ? error.message : "Something went wrong",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const fetchExpenses = async () => {
+    try {
+      const { data, error } = await supabase
         .from("expenses")
         .select(`
-          *,
-          users!expenses_paid_by_fkey (name),
-          expense_splits (
+          id,
+          description,
+          amount,
+          category,
+          date,
+          created_at,
+          paid_by,
+          users!expenses_paid_by_fkey(name),
+          expense_splits(
+            user_id,
             amount,
-            users (id, name)
+            users!expense_splits_user_id_fkey(name)
           ),
-          comments (id)
+          comments(id)
         `)
         .eq("group_id", groupId)
         .order("created_at", { ascending: false })
 
-      if (expensesError) throw expensesError
+      if (error) throw error
 
-      const formattedExpenses = expensesData.map((expense) => ({
+      const expensesWithDetails = data.map((expense: any) => ({
         id: expense.id,
         description: expense.description,
         amount: expense.amount,
@@ -153,37 +140,37 @@ export function GroupView({ groupId, onBack, onGroupUpdated }: GroupViewProps) {
         date: expense.date,
         created_at: expense.created_at,
         paid_by: expense.paid_by,
-        paid_by_name: (expense.users as any).name,
-        splits: (expense.expense_splits as any[]).map((split) => ({
-          user_id: split.users.id,
+        paid_by_name: expense.users.name,
+        splits: expense.expense_splits.map((split: any) => ({
+          user_id: split.user_id,
           user_name: split.users.name,
           amount: split.amount,
         })),
-        comments_count: (expense.comments as any[]).length,
+        comments_count: expense.comments.length,
       }))
 
-      setExpenses(formattedExpenses)
+      setExpenses(expensesWithDetails)
     } catch (error) {
-      console.error("Error fetching group data:", error)
-    } finally {
-      setLoading(false)
+      toast({
+        title: "Error fetching expenses",
+        description: error instanceof Error ? error.message : "Something went wrong",
+        variant: "destructive",
+      })
     }
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
-      </div>
-    )
-  }
+  useEffect(() => {
+    fetchGroupData()
+  }, [groupId, user])
 
-  if (!group) {
+  const totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0)
+
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Group not found</h2>
-          <Button onClick={onBack}>Go Back</Button>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading group...</p>
         </div>
       </div>
     )
@@ -192,7 +179,7 @@ export function GroupView({ groupId, onBack, onGroupUpdated }: GroupViewProps) {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200">
+      <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-4">
@@ -201,13 +188,13 @@ export function GroupView({ groupId, onBack, onGroupUpdated }: GroupViewProps) {
                 Back
               </Button>
               <div>
-                <h1 className="text-xl font-semibold text-gray-900">{group.name}</h1>
-                {group.description && <p className="text-sm text-gray-500">{group.description}</p>}
+                <h1 className="text-xl font-semibold text-gray-900">{groupName}</h1>
+                <p className="text-sm text-gray-600">{members.length} members</p>
               </div>
             </div>
             <div className="flex items-center space-x-2">
               <Button variant="outline" size="sm" onClick={() => setShowAddMember(true)}>
-                <Users className="h-4 w-4 mr-2" />
+                <UserPlus className="h-4 w-4 mr-2" />
                 Add Member
               </Button>
               <Button size="sm" onClick={() => setShowAddExpense(true)}>
@@ -219,38 +206,54 @@ export function GroupView({ groupId, onBack, onGroupUpdated }: GroupViewProps) {
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Members & Balances */}
           <div className="lg:col-span-1">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center">
-                  <Users className="h-5 w-5 mr-2" />
-                  Members ({members.length})
+                <CardTitle className="flex items-center space-x-2">
+                  <Receipt className="h-5 w-5" />
+                  <span>Group Summary</span>
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                {members.map((member) => (
-                  <div key={member.id} className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <Avatar className="h-8 w-8">
-                        <AvatarImage src={member.avatar_url || undefined} />
-                        <AvatarFallback>{member.name.charAt(0)}</AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <p className="text-sm font-medium">{member.name}</p>
-                        <p className="text-xs text-gray-500">{member.email}</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className={`text-sm font-medium ${member.balance >= 0 ? "text-green-600" : "text-red-600"}`}>
-                        {member.balance >= 0 ? "+" : "-"}${Math.abs(member.balance).toFixed(2)}
-                      </p>
-                      <p className="text-xs text-gray-500">{member.balance >= 0 ? "gets back" : "owes"}</p>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="text-center p-4 bg-gray-50 rounded-lg">
+                    <p className="text-sm text-gray-600">Total Expenses</p>
+                    <p className="text-2xl font-bold text-gray-900">₹{totalExpenses.toFixed(2)}</p>
+                  </div>
+
+                  <Separator />
+
+                  <div>
+                    <h3 className="font-medium text-gray-900 mb-3">Member Balances</h3>
+                    <div className="space-y-3">
+                      {members.map((member) => (
+                        <div key={member.id} className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <Avatar className="h-8 w-8">
+                              <AvatarFallback className="text-sm">{member.name.charAt(0)}</AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <p className="text-sm font-medium">{member.name}</p>
+                              <p className="text-xs text-gray-500">{member.email}</p>
+                            </div>
+                          </div>
+                          <Badge
+                            variant={member.balance > 0 ? "default" : member.balance < 0 ? "destructive" : "secondary"}
+                          >
+                            {member.balance > 0
+                              ? `+₹${member.balance.toFixed(2)}`
+                              : member.balance < 0
+                                ? `-₹${Math.abs(member.balance).toFixed(2)}`
+                                : "₹0.00"}
+                          </Badge>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                ))}
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -258,31 +261,35 @@ export function GroupView({ groupId, onBack, onGroupUpdated }: GroupViewProps) {
           {/* Expenses */}
           <div className="lg:col-span-2">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-semibold text-gray-900">Recent Expenses ({expenses.length})</h2>
+              <h2 className="text-2xl font-bold text-gray-900">Recent Expenses</h2>
+              <Button onClick={() => setShowAddExpense(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Expense
+              </Button>
             </div>
 
             {expenses.length === 0 ? (
-              <Card className="text-center py-12">
-                <CardContent>
+              <Card>
+                <CardContent className="text-center py-12">
                   <Receipt className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                   <h3 className="text-lg font-medium text-gray-900 mb-2">No expenses yet</h3>
-                  <p className="text-gray-500 mb-4">Add your first expense to get started</p>
+                  <p className="text-gray-600 mb-6">Add your first expense to get started</p>
                   <Button onClick={() => setShowAddExpense(true)}>
                     <Plus className="h-4 w-4 mr-2" />
-                    Add Expense
+                    Add First Expense
                   </Button>
                 </CardContent>
               </Card>
             ) : (
               <div className="space-y-4">
                 {expenses.map((expense) => (
-                  <ExpenseCard key={expense.id} expense={expense} onExpenseUpdated={fetchGroupData} />
+                  <ExpenseCard key={expense.id} expense={expense} onExpenseUpdated={fetchExpenses} />
                 ))}
               </div>
             )}
           </div>
         </div>
-      </div>
+      </main>
 
       <AddExpenseDialog
         open={showAddExpense}
@@ -292,7 +299,6 @@ export function GroupView({ groupId, onBack, onGroupUpdated }: GroupViewProps) {
         onExpenseAdded={() => {
           setShowAddExpense(false)
           fetchGroupData()
-          onGroupUpdated()
         }}
       />
 

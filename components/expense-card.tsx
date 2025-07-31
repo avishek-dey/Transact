@@ -86,7 +86,7 @@ export function ExpenseCard({ expense, onExpenseUpdated }: ExpenseCardProps) {
               </div>
             </div>
             <div className="text-right">
-              <div className="text-2xl font-bold text-gray-900">${expense.amount.toFixed(2)}</div>
+              <div className="text-2xl font-bold text-gray-900">₹{expense.amount.toFixed(2)}</div>
               <div className="flex items-center space-x-2 mt-2">
                 <Button
                   variant="ghost"
@@ -163,7 +163,7 @@ export function ExpenseCard({ expense, onExpenseUpdated }: ExpenseCardProps) {
                       </Avatar>
                       <span>{split.user_name}</span>
                     </div>
-                    <span className="font-medium">${split.amount.toFixed(2)}</span>
+                    <span className="font-medium">₹{split.amount.toFixed(2)}</span>
                   </div>
                 ))}
               </div>

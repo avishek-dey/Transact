@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -99,7 +98,7 @@ export function AddExpenseDialog({ open, onOpenChange, groupId, members, onExpen
         if (Math.abs(totalCustom - expenseAmount) > 0.01) {
           toast({
             title: "Split amounts don't match",
-            description: `Split amounts (${totalCustom.toFixed(2)}) must equal the total amount (${expenseAmount.toFixed(2)})`,
+            description: `Split amounts (₹${totalCustom.toFixed(2)}) must equal the total amount (₹${expenseAmount.toFixed(2)})`,
             variant: "destructive",
           })
           setIsLoading(false)
@@ -189,7 +188,7 @@ export function AddExpenseDialog({ open, onOpenChange, groupId, members, onExpen
                 <Input id="description" name="description" placeholder="What was this expense for?" required />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="amount">Amount ($)</Label>
+                <Label htmlFor="amount">Amount (₹)</Label>
                 <Input
                   id="amount"
                   type="number"
@@ -282,7 +281,7 @@ export function AddExpenseDialog({ open, onOpenChange, groupId, members, onExpen
                       <div className="flex items-center space-x-2">
                         {splitType === "equal" ? (
                           <span className="text-sm text-gray-500">
-                            ${amount ? (Number.parseFloat(amount) / selectedMembers.length).toFixed(2) : "0.00"}
+                            ₹{amount ? (Number.parseFloat(amount) / selectedMembers.length).toFixed(2) : "0.00"}
                           </span>
                         ) : (
                           <Input

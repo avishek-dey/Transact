@@ -83,17 +83,17 @@ export function CreateGroupDialog({ open, onOpenChange, onGroupCreated }: Create
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Create New Group</DialogTitle>
-          <DialogDescription>Create a group to start splitting expenses with friends</DialogDescription>
+          <DialogDescription>Create a new group to start splitting expenses with friends and family.</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="name">Group Name</Label>
-              <Input id="name" name="name" placeholder="e.g., Weekend Trip, Roommates, etc." required />
+              <Input id="name" name="name" placeholder="e.g., Trip to Goa, Roommates, Office Lunch" required />
             </div>
             <div className="space-y-2">
               <Label htmlFor="description">Description (Optional)</Label>
-              <Textarea id="description" name="description" placeholder="What's this group for?" rows={3} />
+              <Textarea id="description" name="description" placeholder="What is this group for?" rows={3} />
             </div>
           </div>
           <DialogFooter>

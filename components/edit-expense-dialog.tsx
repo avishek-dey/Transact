@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { useAuth } from "@/lib/auth"
 import { supabase } from "@/lib/supabase"
 import { toast } from "@/hooks/use-toast"
 
@@ -54,6 +54,7 @@ const categories = [
 ]
 
 export function EditExpenseDialog({ open, onOpenChange, expense, onExpenseUpdated }: EditExpenseDialogProps) {
+  const { user } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
   const [description, setDescription] = useState(expense.description)
   const [amount, setAmount] = useState(expense.amount.toString())
@@ -69,6 +70,8 @@ export function EditExpenseDialog({ open, onOpenChange, expense, onExpenseUpdate
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    if (!user) return
+
     setIsLoading(true)
 
     const expenseAmount = Number.parseFloat(amount)
@@ -84,40 +87,17 @@ export function EditExpenseDialog({ open, onOpenChange, expense, onExpenseUpdate
     }
 
     try {
-      // Update the expense
-      const { error: expenseError } = await supabase
+      const { error } = await supabase
         .from("expenses")
         .update({
           description,
           amount: expenseAmount,
           category,
           date,
-          updated_at: new Date().toISOString(),
         })
         .eq("id", expense.id)
 
-      if (expenseError) throw expenseError
-
-      // If amount changed, update splits proportionally
-      if (expenseAmount !== expense.amount) {
-        const ratio = expenseAmount / expense.amount
-
-        const updatedSplits = expense.splits.map((split) => ({
-          expense_id: expense.id,
-          user_id: split.user_id,
-          amount: split.amount * ratio,
-        }))
-
-        // Delete existing splits
-        const { error: deleteError } = await supabase.from("expense_splits").delete().eq("expense_id", expense.id)
-
-        if (deleteError) throw deleteError
-
-        // Insert updated splits
-        const { error: splitsError } = await supabase.from("expense_splits").insert(updatedSplits)
-
-        if (splitsError) throw splitsError
-      }
+      if (error) throw error
 
       toast({ title: "Expense updated successfully!" })
       onExpenseUpdated()
@@ -137,7 +117,7 @@ export function EditExpenseDialog({ open, onOpenChange, expense, onExpenseUpdate
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Edit Expense</DialogTitle>
-          <DialogDescription>Make changes to this expense</DialogDescription>
+          <DialogDescription>Update the expense details</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
           <div className="grid gap-4 py-4">
@@ -147,17 +127,19 @@ export function EditExpenseDialog({ open, onOpenChange, expense, onExpenseUpdate
                 id="edit-description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
+                placeholder="What was this expense for?"
                 required
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-amount">Amount ($)</Label>
+              <Label htmlFor="edit-amount">Amount (₹)</Label>
               <Input
                 id="edit-amount"
                 type="number"
                 step="0.01"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
+                placeholder="0.00"
                 required
               />
             </div>

@@ -14,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { useAuth } from "@/lib/auth"
 import { supabase } from "@/lib/supabase"
 import { toast } from "@/hooks/use-toast"
 
@@ -25,10 +26,13 @@ interface AddMemberDialogProps {
 }
 
 export function AddMemberDialog({ open, onOpenChange, groupId, onMemberAdded }: AddMemberDialogProps) {
+  const { user } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    if (!user) return
+
     setIsLoading(true)
 
     const formData = new FormData(e.currentTarget)
@@ -36,7 +40,7 @@ export function AddMemberDialog({ open, onOpenChange, groupId, onMemberAdded }: 
     const name = formData.get("name") as string
 
     try {
-      // Check if user exists
+      // Check if user already exists
       const { data: existingUser, error: userError } = await supabase
         .from("users")
         .select("id")
@@ -49,13 +53,8 @@ export function AddMemberDialog({ open, onOpenChange, groupId, onMemberAdded }: 
         // User doesn't exist, create them
         const { data: newUser, error: createError } = await supabase
           .from("users")
-          .insert([
-            {
-              email,
-              name,
-            },
-          ])
-          .select()
+          .insert([{ email, name }])
+          .select("id")
           .single()
 
         if (createError) throw createError
@@ -111,16 +110,16 @@ export function AddMemberDialog({ open, onOpenChange, groupId, onMemberAdded }: 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Add Member</DialogTitle>
+          <DialogTitle>Add Group Member</DialogTitle>
           <DialogDescription>
-            Add a new member to this group. If they don't have an account, we'll create one for them.
+            Add a new member to this group. If they don't have an account, one will be created for them.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Full Name</Label>
-              <Input id="name" name="name" placeholder="Enter their full name" required />
+              <Label htmlFor="name">Name</Label>
+              <Input id="name" name="name" placeholder="Enter their name" required />
             </div>
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>

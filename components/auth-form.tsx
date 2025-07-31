@@ -12,8 +12,8 @@ import { useAuth } from "@/lib/auth"
 import { toast } from "@/hooks/use-toast"
 
 export function AuthForm() {
-  const [isLoading, setIsLoading] = useState(false)
   const { signIn, signUp } = useAuth()
+  const [isLoading, setIsLoading] = useState(false)
 
   const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -42,9 +42,9 @@ export function AuthForm() {
     setIsLoading(true)
 
     const formData = new FormData(e.currentTarget)
+    const name = formData.get("name") as string
     const email = formData.get("email") as string
     const password = formData.get("password") as string
-    const name = formData.get("name") as string
 
     try {
       await signUp(email, password, name)
@@ -61,11 +61,11 @@ export function AuthForm() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold">SplitSmart</CardTitle>
-          <CardDescription>Split expenses with friends, simplified</CardDescription>
+          <CardDescription>Split expenses with friends and family</CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="signin" className="w-full">
@@ -73,7 +73,6 @@ export function AuthForm() {
               <TabsTrigger value="signin">Sign In</TabsTrigger>
               <TabsTrigger value="signup">Sign Up</TabsTrigger>
             </TabsList>
-
             <TabsContent value="signin">
               <form onSubmit={handleSignIn} className="space-y-4">
                 <div className="space-y-2">
@@ -95,12 +94,11 @@ export function AuthForm() {
                 </Button>
               </form>
             </TabsContent>
-
             <TabsContent value="signup">
               <form onSubmit={handleSignUp} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="signup-name">Full Name</Label>
-                  <Input id="signup-name" name="name" type="text" placeholder="Enter your full name" required />
+                  <Label htmlFor="signup-name">Name</Label>
+                  <Input id="signup-name" name="name" type="text" placeholder="Enter your name" required />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="signup-email">Email</Label>
